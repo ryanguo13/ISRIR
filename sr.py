@@ -9,6 +9,7 @@ from core.wandb_logger import WandbLogger
 from tensorboardX import SummaryWriter
 import os
 import numpy as np
+from tqdm import tqdm
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -80,7 +81,8 @@ if __name__ == "__main__":
     if opt['phase'] == 'train':
         while current_step < n_iter:
             current_epoch += 1
-            for _, train_data in enumerate(train_loader):
+            pbar = tqdm(train_loader, desc=f"Epoch {current_epoch}")
+            for _, train_data in enumerate(pbar):
                 current_step += 1
                 if current_step > n_iter:
                     break
@@ -98,6 +100,9 @@ if __name__ == "__main__":
 
                     if wandb_logger:
                         wandb_logger.log_metrics(logs)
+
+                    # Update tqdm postfix
+                    pbar.set_postfix({k: f"{v:.4e}" for k, v in logs.items()})
 
                 # validation
                 if current_step % opt['train']['val_freq'] == 0:
