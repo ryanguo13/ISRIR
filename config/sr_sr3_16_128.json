@@ -57,13 +57,13 @@
         "beta_schedule": {
             "train": {
                 "schedule": "linear",
-                "n_timestep": 2000,
+                "n_timestep": 100,
                 "linear_start": 1e-6,
                 "linear_end": 1e-2
             },
             "val": {
                 "schedule": "linear",
-                "n_timestep": 2000,
+                "n_timestep": 100,
                 "linear_start": 1e-6,
                 "linear_end": 1e-2
             }
@@ -83,7 +83,7 @@
         "print_freq": 200,
         "optimizer": {
             "type": "adam",
-            "lr": 1e-4
+            "lr": 1e-2
         },
         "ema_scheduler": {
             "step_start_ema": 5000,

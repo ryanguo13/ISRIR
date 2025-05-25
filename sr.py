@@ -81,7 +81,8 @@ if __name__ == "__main__":
     if opt['phase'] == 'train':
         while current_step < n_iter:
             current_epoch += 1
-            for _, train_data in tqdm(enumerate(train_loader), desc=f"Epoch {current_epoch}", total=len(train_loader)):
+            pbar = tqdm(train_loader, desc=f"Epoch {current_epoch}")
+            for _, train_data in enumerate(pbar):
                 current_step += 1
                 if current_step > n_iter:
                     break
@@ -99,6 +100,9 @@ if __name__ == "__main__":
 
                     if wandb_logger:
                         wandb_logger.log_metrics(logs)
+
+                    # Update tqdm postfix
+                    pbar.set_postfix({k: f"{v:.4e}" for k, v in logs.items()})
 
                 # validation
                 if current_step % opt['train']['val_freq'] == 0:
