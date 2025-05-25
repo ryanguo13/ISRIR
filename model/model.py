@@ -6,6 +6,7 @@ import torch.nn as nn
 import os
 import model.networks as networks
 from .base_model import BaseModel
+from torch.amp import autocast, GradScaler
 logger = logging.getLogger('base')
 
 
@@ -36,9 +37,22 @@ class DDPM(BaseModel):
             else:
                 optim_params = list(self.netG.parameters())
 
-            self.optG = torch.optim.Adam(
-                optim_params, lr=opt['train']["optimizer"]["lr"])
+            # 支持AdamW优化器
+            optimizer_type = opt['train']["optimizer"].get("type", "adam").lower()
+            lr = opt['train']["optimizer"]["lr"]
+            
+            if optimizer_type == "adamw":
+                weight_decay = opt['train']["optimizer"].get("weight_decay", 1e-2)
+                self.optG = torch.optim.AdamW(
+                    optim_params, lr=lr, weight_decay=weight_decay)
+                logger.info(f'Using AdamW optimizer with lr={lr}, weight_decay={weight_decay}')
+            else:
+                self.optG = torch.optim.Adam(optim_params, lr=lr)
+                logger.info(f'Using Adam optimizer with lr={lr}')
+                
             self.log_dict = OrderedDict()
+            if self.device.type == 'mps':
+                self.scaler = GradScaler()
         self.load_network()
         self.print_network()
 
@@ -47,15 +61,43 @@ class DDPM(BaseModel):
 
     def optimize_parameters(self):
         self.optG.zero_grad()
+        if self.device.type == 'mps':
+            with autocast(device_type='mps', enabled=True):
+                l_pix = self.netG(self.data)
+                # need to average in multi-gpu
+                b, c, h, w = self.data['HR'].shape
+                l_pix = l_pix.sum()/int(b*c*h*w)
+
+            self.scaler.scale(l_pix).backward()
+            self.scaler.step(self.optG)
+            self.scaler.update()
+        else:
+            l_pix = self.netG(self.data)
+            # need to average in multi-gpu
+            b, c, h, w = self.data['HR'].shape
+            l_pix = l_pix.sum()/int(b*c*h*w)
+            l_pix.backward()
+            self.optG.step()
+
+        # set log
+        self.log_dict['l_pix'] = l_pix.item()
+    
+    def optimize_parameters_amp(self, scaler):
+        """混合精度训练的优化函数"""
+        self.optG.zero_grad()
+        
         l_pix = self.netG(self.data)
         # need to average in multi-gpu
         b, c, h, w = self.data['HR'].shape
         l_pix = l_pix.sum()/int(b*c*h*w)
-        l_pix.backward()
-        self.optG.step()
+        
+        scaler.scale(l_pix).backward()
+        scaler.step(self.optG)
+        scaler.update()
 
         # set log
         self.log_dict['l_pix'] = l_pix.item()
+        return l_pix.item()
 
     def test(self, continous=False):
         self.netG.eval()

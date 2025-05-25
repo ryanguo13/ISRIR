@@ -1,0 +1,95 @@
+{
+  "name": "sr_ffhq_test_short",
+  "phase": "train",
+  "gpu_ids": [
+    0
+  ],
+  "log_wandb_ckpt": false,
+  "log_eval": false,
+  "enable_wandb": false,
+  "path": {
+    "log": "logs",
+    "tb_logger": "tb_logger",
+    "results": "results",
+    "checkpoint": "checkpoint",
+    "param_output": "param_outputs"
+  },
+  "datasets": {
+    "train": {
+      "name": "FFHQ",
+      "mode": "LRHR",
+      "dataroot": "dataset/ffhq_16_128_16_128",
+      "datatype": "lmdb",
+      "l_resolution": 16,
+      "r_resolution": 128,
+      "batch_size": 4,
+      "num_workers": 8,
+      "use_shuffle": true,
+      "data_len": 10
+    },
+    "val": {
+      "name": "FFHQ",
+      "mode": "LRHR",
+      "dataroot": "dataset/ffhq_raw_images_prepared_16_128",
+      "datatype": "img",
+      "l_resolution": 16,
+      "r_resolution": 128,
+      "data_len": 2
+    }
+  },
+  "model": {
+    "which_model_G": "sr3",
+    "finetune_norm": false,
+    "unet": {
+      "in_channel": 6,
+      "out_channel": 3,
+      "inner_channel": 32,
+      "channel_multiplier": [
+        1,
+        2,
+        4
+      ],
+      "attn_res": [
+        16
+      ],
+      "res_blocks": 1,
+      "dropout": 0.1
+    },
+    "beta_schedule": {
+      "train": {
+        "schedule": "linear",
+        "n_timestep": 100,
+        "linear_start": 1e-06,
+        "linear_end": 0.01
+      },
+      "val": {
+        "schedule": "linear",
+        "n_timestep": 10,
+        "linear_start": 1e-06,
+        "linear_end": 0.01
+      }
+    },
+    "diffusion": {
+      "image_size": 128,
+      "channels": 3,
+      "conditional": true
+    }
+  },
+  "train": {
+    "n_iter": 5,
+    "val_freq": 5,
+    "save_checkpoint_freq": 10,
+    "print_freq": 1,
+    "save_param_freq": 10,
+    "optimizer": {
+      "type": "adamw",
+      "lr": 0.0002,
+      "weight_decay": 0.01
+    },
+    "ema_scheduler": {
+      "step_start_ema": 1,
+      "update_ema_every": 1,
+      "ema_decay": 0.9999
+    }
+  }
+}

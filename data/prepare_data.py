@@ -12,6 +12,7 @@ from pathlib import Path
 import lmdb
 import numpy as np
 import time
+import data.util as Util
 
 
 def resize_and_convert(img, size, resample):
@@ -48,11 +49,11 @@ def resize_worker(img_file, sizes, resample, lmdb_save=False):
     return img_file.name.split('.')[0], out
 
 class WorkingContext():
-    def __init__(self, resize_fn, lmdb_save, out_path, env, sizes):
+    def __init__(self, resize_fn, lmdb_save, out_path, sizes):
         self.resize_fn = resize_fn
         self.lmdb_save = lmdb_save
         self.out_path = out_path
-        self.env = env
+        self.env = None # Initialize env to None
         self.sizes = sizes
 
         self.counter = RawValue('i', 0)
@@ -68,6 +69,10 @@ class WorkingContext():
             return self.counter.value
 
 def prepare_process_worker(wctx, file_subset):
+    env = None
+    if wctx.lmdb_save:
+        env = lmdb.open(wctx.out_path, map_size=1024 ** 4, readahead=False)
+
     for file in file_subset:
         i, imgs = wctx.resize_fn(file)
         lr_img, hr_img, sr_img = imgs
@@ -79,7 +84,7 @@ def prepare_process_worker(wctx, file_subset):
             sr_img.save(
                 '{}/sr_{}_{}/{}.png'.format(wctx.out_path, wctx.sizes[0], wctx.sizes[1], i.zfill(5)))
         else:
-            with wctx.env.begin(write=True) as txn:
+            with env.begin(write=True) as txn:
                 txn.put('lr_{}_{}'.format(
                     wctx.sizes[0], i.zfill(5)).encode('utf-8'), lr_img)
                 txn.put('hr_{}_{}'.format(
@@ -88,8 +93,11 @@ def prepare_process_worker(wctx, file_subset):
                     wctx.sizes[0], wctx.sizes[1], i.zfill(5)).encode('utf-8'), sr_img)
         curr_total = wctx.inc_get()
         if wctx.lmdb_save:
-            with wctx.env.begin(write=True) as txn:
+            with env.begin(write=True) as txn:
                 txn.put('length'.encode('utf-8'), str(curr_total).encode('utf-8'))
+
+    if env:
+        env.close()
 
 def all_threads_inactive(worker_threads):
     for thread in worker_threads:
@@ -101,7 +109,7 @@ def prepare(img_path, out_path, n_worker, sizes=(16, 128), resample=Image.BICUBI
     resize_fn = partial(resize_worker, sizes=sizes,
                         resample=resample, lmdb_save=lmdb_save)
     files = [p for p in Path(
-        '{}'.format(img_path)).glob(f'**/*')]
+        '{}'.format(img_path)).glob(f'**/*') if Util.is_image_file(p.name)]
 
     if not lmdb_save:
         os.makedirs(out_path, exist_ok=True)
@@ -120,7 +128,7 @@ def prepare(img_path, out_path, n_worker, sizes=(16, 128), resample=Image.BICUBI
 
         file_subsets = np.array_split(files, n_worker)
         worker_threads = []
-        wctx = WorkingContext(resize_fn, lmdb_save, out_path, multi_env, sizes)
+        wctx = WorkingContext(resize_fn, lmdb_save, out_path, sizes)
 
         # start worker processes, monitor results
         for i in range(n_worker):

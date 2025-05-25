@@ -130,3 +130,45 @@ dmypy.json
 .pyre/
 
 *.lmdb
+
+# Dataset and model files
+data/prepared_prettygirl_16_128/
+data/singlepic/
+data/single_image_infer/
+data/celeba_hq_256/
+data/__pycache__/
+dataset/ffhq_raw_images_prepared_16_128/
+dataset/ffhq_raw_images_16_128/
+dataset/ffhq_16_128_16_128/
+dataset/ffhq_16_128/
+dataset/celebahq_16_128/
+dataset/celebahq_64_512/
+dataset/ffhq_64_512/
+dataset/ffhq_raw_images/
+
+# Large model files
+*.pth
+*.ckpt
+*.safetensors
+
+# System files
+.DS_Store
+.idea/
+.vscode/
+*.tmp.*
+
+# Training outputs
+checkpoint/
+param_outputs/
+results/
+tb_logger/
+logs/
+dummy_logs/
+experiments/
+
+# UV lock files (large)
+uv.lock
+
+# Temporary download files
+uc_export=*
+ffhq-dataset-v2.json.tmp.*

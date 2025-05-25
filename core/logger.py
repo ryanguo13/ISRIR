@@ -1,6 +1,8 @@
 import os
 import os.path as osp
 import logging
+import sys
+import torch
 from collections import OrderedDict
 import json
 from datetime import datetime
@@ -45,18 +47,40 @@ def parse(args):
     # change dataset length limit
     opt['phase'] = phase
 
-    # export CUDA_VISIBLE_DEVICES
-    if gpu_ids is not None:
+    # set device
+    if sys.platform == 'darwin' and torch.backends.mps.is_available():
+        opt['device'] = 'mps'
+        print("Using MPS device.")
+        # In MPS, gpu_ids is not used, set to None
+        opt['gpu_ids'] = None
+        opt['distributed'] = False # MPS is not distributed in this context
+    elif gpu_ids is not None:
         opt['gpu_ids'] = [int(id) for id in gpu_ids.split(',')]
         gpu_list = gpu_ids
+        os.environ['CUDA_VISIBLE_DEVICES'] = gpu_list
+        print('export CUDA_VISIBLE_DEVICES=' + gpu_list)
+        if len(opt['gpu_ids']) > 1: # Use opt['gpu_ids'] which is a list
+            opt['distributed'] = True
+        else:
+            opt['distributed'] = False
+        opt['device'] = 'cuda'
     else:
-        gpu_list = ','.join(str(x) for x in opt['gpu_ids'])
-    os.environ['CUDA_VISIBLE_DEVICES'] = gpu_list
-    print('export CUDA_VISIBLE_DEVICES=' + gpu_list)
-    if len(gpu_list) > 1:
-        opt['distributed'] = True
-    else:
-        opt['distributed'] = False
+        # Use gpu_ids from config file
+        if opt.get('gpu_ids') is not None: # Use .get() to avoid KeyError if gpu_ids is missing
+             gpu_list = ','.join(str(x) for x in opt['gpu_ids'])
+             os.environ['CUDA_VISIBLE_DEVICES'] = gpu_list
+             print('export CUDA_VISIBLE_DEVICES=' + gpu_list)
+             if len(opt['gpu_ids']) > 1: # Use opt['gpu_ids'] which is a list
+                 opt['distributed'] = True
+             else:
+                 opt['distributed'] = False
+             opt['device'] = 'cuda'
+        else:
+            # No gpu_ids specified, use CPU
+            opt['gpu_ids'] = None
+            opt['distributed'] = False
+            opt['device'] = 'cpu'
+            print("Using CPU device.")
 
     # debug
     if 'debug' in opt['name']:

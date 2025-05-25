@@ -205,11 +205,17 @@ class GaussianDiffusion(nn.Module):
         if not self.conditional:
             shape = x_in
             b = shape[0]
-            img = torch.randn(shape, device=device)
+            # Ensure device is a torch.device object
+            current_device = device if isinstance(device, torch.device) else torch.device('cpu') # Default to cpu if device is not a torch.device object
+            # Ensure shape is a tuple of Python ints
+            shape_tuple = tuple(shape)
+            print(f"Shape type before randn: {type(shape_tuple)}, value: {shape_tuple}")
+            print(f"Device type before randn: {type(current_device)}, value: {current_device}")
+            img = torch.randn(shape_tuple, device=current_device)
             ret_img = img
             for i in tqdm(reversed(range(0, self.num_timesteps)), desc='sampling loop time step', total=self.num_timesteps):
                 img = self.p_sample(img, torch.full(
-                    (b,), i, device=device, dtype=torch.long))
+                    (b,), i, device=current_device, dtype=torch.long)) # Use current_device
                 if i % sample_inter == 0:
                     ret_img = torch.cat([ret_img, img], dim=0)
             return img
@@ -217,11 +223,17 @@ class GaussianDiffusion(nn.Module):
             x = x_in
             shape = x.shape
             b = shape[0]
-            img = torch.randn(shape, device=device)
+            # Ensure device is a torch.device object
+            current_device = device if isinstance(device, torch.device) else torch.device('cpu') # Default to cpu if device is not a torch.device object
+            # Ensure shape is a tuple of Python ints
+            shape_tuple = tuple(shape)
+            print(f"Shape type before randn: {type(shape_tuple)}, value: {shape_tuple}")
+            print(f"Device type before randn: {type(current_device)}, value: {current_device}")
+            img = torch.randn(shape_tuple, device=current_device)
             ret_img = x
             for i in tqdm(reversed(range(0, self.num_timesteps)), desc='sampling loop time step', total=self.num_timesteps):
                 img = self.p_sample(img, torch.full(
-                    (b,), i, device=device, dtype=torch.long), condition_x=x)
+                    (b,), i, device=current_device, dtype=torch.long), condition_x=x) # Use current_device
                 if i % sample_inter == 0:
                     ret_img = torch.cat([ret_img, img], dim=0)
         if continous:
