@@ -1,4 +1,5 @@
 import torch
+import traceback
 import data as Data
 import model as Model
 import argparse
@@ -7,59 +8,13 @@ import core.logger as Logger
 import core.metrics as Metrics
 from core.wandb_logger import WandbLogger
 from core.param_logger import ParameterLogger
-from tensorboardX import SummaryWriter
 import os
 import numpy as np
 from tqdm import tqdm
 import time
 import torch.cuda.amp as amp
-
-
-def export_onnx_model(model, checkpoint_dir, step):
-    """导出ONNX模型"""
-    try:
-        # 创建ONNX输出目录
-        onnx_dir = os.path.join(checkpoint_dir, 'onnx')
-        os.makedirs(onnx_dir, exist_ok=True)
-        
-        # 设置模型为评估模式
-        model.eval()
-        
-        # 创建示例输入 (低分辨率图像16x16 + 条件噪声)
-        # 批次大小=1, 通道=6 (3通道LR + 3通道噪声), 16x16
-        dummy_input = torch.randn(1, 6, 16, 16).cuda()
-        
-        # 如果模型被DataParallel包装，获取原始模型
-        if isinstance(model, torch.nn.DataParallel):
-            model = model.module
-        
-        # ONNX导出路径
-        onnx_path = os.path.join(onnx_dir, f'sr3_model_step_{step}.onnx')
-        
-        # 导出ONNX
-        torch.onnx.export(
-            model,
-            dummy_input,
-            onnx_path,
-            export_params=True,
-            opset_version=11,
-            do_constant_folding=True,
-            input_names=['lr_image'],
-            output_names=['sr_image'],
-            dynamic_axes={
-                'lr_image': {0: 'batch_size'},
-                'sr_image': {0: 'batch_size'}
-            }
-        )
-        
-        return onnx_path
-        
-    except Exception as e:
-        raise RuntimeError(f"ONNX export failed: {e}")
-    finally:
-        # 恢复训练模式
-        model.train()
-
+import torch.onnx
+import wandb
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -72,6 +27,12 @@ if __name__ == "__main__":
     parser.add_argument('--enable_wandb', action='store_true')
     parser.add_argument('--log_wandb_ckpt', action='store_true')
     parser.add_argument('--log_eval', action='store_true')
+    parser.add_argument('--wandb_api_key', type=str, help='WandB API Key')
+    parser.add_argument('--wandb_project', type=str, help='WandB Project Name')
+    parser.add_argument('--wandb_entity', type=str, help='WandB Entity Name')
+
+    #os environs
+    os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
     # parse configs
     args = parser.parse_args()
@@ -79,12 +40,34 @@ if __name__ == "__main__":
     # Convert to NoneDict, which return None for missing key.
     opt = Logger.dict_to_nonedict(opt)
 
+    # 初始化wandb
+    if opt['enable_wandb']:
+        # 设置wandb API key
+        if args.wandb_api_key:
+            os.environ["WANDB_API_KEY"] = args.wandb_api_key
+        
+        # 初始化wandb
+        wandb.init(
+            project=args.wandb_project or opt['wandb']['project'],
+            entity=args.wandb_entity,
+            config=opt,
+            name=opt['name'],
+            id=None,  # 自动生成run id
+            resume="allow"  # 允许恢复之前的运行
+        )
+        
+        # 设置wandb日志记录
+        wandb.define_metric('validation/val_step')
+        wandb.define_metric('epoch')
+        wandb.define_metric("validation/*", step_metric="val_step")
+        wandb.define_metric("training/*", step_metric="step")
+        val_step = 0
+    else:
+        wandb_logger = None
+
     # logging
     torch.backends.cudnn.enabled = True
     torch.backends.cudnn.benchmark = True
-    torch.backends.cudnn.deterministic = False
-    torch.backends.cuda.matmul.allow_tf32 = True
-    torch.backends.cudnn.allow_tf32 = True
     
     # 启用混合精度训练以提高速度
     use_amp = True
@@ -101,19 +84,6 @@ if __name__ == "__main__":
     Logger.setup_logger('val', opt['path']['log'], 'val', level=logging.INFO)
     logger = logging.getLogger('base')
     logger.info(Logger.dict2str(opt))
-    tb_logger = SummaryWriter(log_dir=opt['path']['tb_logger'])
-
-    # Initialize WandbLogger
-    if opt['enable_wandb']:
-        import wandb
-        wandb_logger = WandbLogger(opt)
-        wandb.define_metric('validation/val_step')
-        wandb.define_metric('epoch')
-        wandb.define_metric("validation/*", step_metric="val_step")
-        wandb.define_metric("training/*", step_metric="step")
-        val_step = 0
-    else:
-        wandb_logger = None
 
     # Initialize Parameter Logger
     param_log_dir = opt['path'].get('param_output', 'param_outputs')
@@ -158,6 +128,18 @@ if __name__ == "__main__":
     if opt['phase'] == 'train':
         start_time = time.time()
         
+        # 在训练开始时记录所有超参数
+        if wandb_logger:
+            wandb_logger.log_config({
+                'dropout_rate': opt['model']['unet']['dropout'],
+                'learning_rate': opt['train']['optimizer']['lr'],
+                'weight_decay': opt['train']['optimizer']['weight_decay'],
+                'batch_size': opt['datasets']['train']['batch_size'],
+                'inner_channel': opt['model']['unet']['inner_channel'],
+                'res_blocks': opt['model']['unet']['res_blocks'],
+                'channel_multiplier': opt['model']['unet']['channel_multiplier']
+            })
+        
         while current_step < n_iter:
             current_epoch += 1
             epoch_start_time = time.time()
@@ -192,13 +174,23 @@ if __name__ == "__main__":
                         current_epoch, current_step)
                     for k, v in logs.items():
                         message += '{:s}: {:.4e} '.format(k, v)
-                        tb_logger.add_scalar(k, v, current_step)
                     logger.info(message)
 
                     if wandb_logger and current_step % (opt['train']['print_freq'] * 2) == 0:
-                        wandb_logs = {'training/' + k: v for k, v in logs.items()}
-                        wandb_logs['step'] = current_step
+                        wandb_logs = {
+                            'training/' + k: v for k, v in logs.items()
+                        }
+                        wandb_logs.update({
+                            'training/lr': diffusion.optG.param_groups[0]['lr'],
+                            'training/dropout_rate': opt['model']['unet']['dropout'],
+                            'training/gradient_norm': torch.nn.utils.clip_grad_norm_(diffusion.netG.parameters(), float('inf')).item(),
+                            'training/weight_norm': sum(p.norm().item() for p in diffusion.netG.parameters()),
+                            'step': current_step
+                        })
                         wandb_logger.log_metrics(wandb_logs)
+                        
+                        # 注释掉WandB的层激活值记录
+                        # wandb_logger.log_layer_activations(diffusion.netG, current_step)
                     
                     # 记录损失组件
                     if param_logger.enabled:
@@ -216,6 +208,10 @@ if __name__ == "__main__":
                     param_logger.log_activations(current_step)
                     param_logger.log_noise_schedule(diffusion_model, current_step)
                     param_logger.create_visualizations(current_step)
+                    
+                    # 记录层参数到WandB
+                    if wandb_logger:
+                        wandb_logger.log_layer_parameters(diffusion.netG, current_step)
 
                 # validation
                 if current_step % opt['train']['val_freq'] == 0:
@@ -229,10 +225,9 @@ if __name__ == "__main__":
                         opt['model']['beta_schedule']['val'], schedule_phase='val')
                     
                     # 减少验证样本数量以提高速度
-                    max_val_samples = min(len(val_loader), 3)
-                    
+                    max_val_samples = min(len(val_loader), opt['datasets']['val']['data_len'])
                     for val_idx, val_data in enumerate(val_loader):
-                        if val_idx >= max_val_samples:
+                        if val_idx > max_val_samples:
                             break
                             
                         idx += 1
@@ -254,14 +249,6 @@ if __name__ == "__main__":
                         Metrics.save_img(
                             fake_img, '{}/{}_{}_inf.png'.format(result_path, current_step, idx))
                         
-                        # 只在第一个样本上添加tensorboard图像
-                        if idx == 1:
-                            tb_logger.add_image(
-                                'Iter_{}'.format(current_step),
-                                np.transpose(np.concatenate(
-                                    (fake_img, sr_img, hr_img), axis=1), [2, 0, 1]),
-                                idx)
-                        
                         avg_psnr += Metrics.calculate_psnr(sr_img, hr_img)
 
                         if wandb_logger and idx <= 2:  # 只记录前2个样本到wandb
@@ -281,33 +268,46 @@ if __name__ == "__main__":
                     logger_val = logging.getLogger('val')  # validation logger
                     logger_val.info('<epoch:{:3d}, iter:{:8,d}> psnr: {:.4e}'.format(
                         current_epoch, current_step, avg_psnr))
-                    # tensorboard logger
-                    tb_logger.add_scalar('psnr', avg_psnr, current_step)
-                    tb_logger.add_scalar('val_time', val_time, current_step)
 
                     if wandb_logger:
                         wandb_logger.log_metrics({
                             'validation/val_psnr': avg_psnr,
                             'validation/val_time': val_time,
-                            'validation/val_step': val_step
+                            'validation/val_step': val_step,
+                            'validation/val_ssim': avg_ssim,
+                            'validation/val_loss': val_loss,
+                            'validation/val_gradient_norm': val_grad_norm,
                         })
                         val_step += 1
 
                 if current_step % opt['train']['save_checkpoint_freq'] == 0:
                     logger.info('Saving models and training states.')
                     diffusion.save_network(current_epoch, current_step)
-                    
-                    # 导出ONNX模型 (每5000步导出一次，减少频率)
-                    if current_step % (opt['train']['save_checkpoint_freq'] * 5) == 0:
-                        try:
-                            logger.info('Exporting ONNX model...')
-                            export_onnx_model(diffusion.netG, opt['path']['checkpoint'], current_step)
-                            logger.info(f'ONNX model exported at step {current_step}')
-                        except Exception as e:
-                            logger.warning(f'ONNX export failed: {e}')
 
                     if wandb_logger and opt['log_wandb_ckpt']:
                         wandb_logger.log_checkpoint(current_epoch, current_step)
+                    
+                # 注释掉ONNX导出相关代码
+                # if current_step % opt['train']['save_checkpoint_freq']  == 0:
+                #     try:
+                #         logger.info('Exporting ONNX model...')
+                #         export_onnx_model(diffusion.netG, opt['path']['checkpoint'], current_step)
+                #         logger.info(f'ONNX model exported at step {current_step}')
+                #     except Exception as e:
+                #         logger.warning(f'ONNX export failed: {e}')
+
+                    if wandb_logger and opt['log_wandb_ckpt']:
+                        wandb_logger.log_checkpoint(current_epoch, current_step)
+
+                # 定期记录模型统计信息
+                if wandb_logger and current_step % opt['train']['print_freq'] == 0:
+                    model_stats = {
+                        'model/num_parameters': sum(p.numel() for p in diffusion.netG.parameters()),
+                        'model/num_trainable_parameters': sum(p.numel() for p in diffusion.netG.parameters() if p.requires_grad),
+                        'model/parameter_mean': torch.mean(torch.stack([p.mean() for p in diffusion.netG.parameters()])),
+                        'model/parameter_std': torch.std(torch.stack([p.std() for p in diffusion.netG.parameters()]))
+                    }
+                    wandb_logger.log_metrics(model_stats)
 
             epoch_time = time.time() - epoch_start_time
             logger.info(f'Epoch {current_epoch} completed in {epoch_time:.2f}s')
@@ -325,7 +325,6 @@ if __name__ == "__main__":
 
         total_time = time.time() - start_time
         logger.info(f'Training completed in {total_time:.2f}s ({total_time/3600:.2f}h)')
-        tb_logger.close()
     else:
         logger.info('Begin Model Evaluation.')
         avg_psnr = 0.0

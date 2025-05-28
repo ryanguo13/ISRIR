@@ -1,4 +1,5 @@
 import os
+import torch
 
 class WandbLogger:
     """
@@ -114,3 +115,96 @@ class WandbLogger:
             self._wandb.log({'eval_data': self.eval_table}, commit=commit)
         elif self.infer_table:
             self._wandb.log({'infer_data': self.infer_table}, commit=commit)
+
+    def log_model_graph(self, model, dummy_input):
+        """记录模型结构图"""
+        try:
+            # 使用wandb的watch功能监控模型
+            self._wandb.watch(
+                model,
+                log="all",  # 记录参数、梯度和计算图
+                log_freq=100,  # 每100步记录一次
+                idx=0,
+                log_graph=True  # 记录计算图
+            )
+            
+            # 记录模型结构
+            self._wandb.log({
+                "model_architecture": self._wandb.Image(
+                    self._get_model_graph(model, dummy_input)
+                )
+            })
+        except Exception as e:
+            print(f"Failed to log model graph: {e}")
+    
+    def _get_model_graph(self, model, dummy_input):
+        """生成模型结构图"""
+        try:
+            import torchviz
+            from torchviz import make_dot
+            
+            # 获取模型输出
+            output = model(dummy_input)
+            
+            # 创建计算图
+            dot = make_dot(output, params=dict(model.named_parameters()))
+            
+            # 保存为图片
+            dot.render("model_graph", format="png")
+            
+            # 读取图片
+            import matplotlib.pyplot as plt
+            import matplotlib.image as mpimg
+            img = mpimg.imread('model_graph.png')
+            
+            return img
+        except Exception as e:
+            print(f"Failed to generate model graph: {e}")
+            return None
+
+    def log_layer_activations(self, model, current_step):
+        """记录层的激活值"""
+        try:
+            activations = {}
+            
+            def get_activation(name):
+                def hook(model, input, output):
+                    activations[name] = output.detach()
+                return hook
+            
+            # 为每一层注册钩子
+            hooks = []
+            for name, layer in model.named_modules():
+                if isinstance(layer, (torch.nn.Conv2d, torch.nn.Linear)):
+                    hooks.append(layer.register_forward_hook(get_activation(name)))
+            
+            # 记录激活值
+            self._wandb.log({
+                f"activations/{name}": self._wandb.Histogram(act.cpu().numpy())
+                for name, act in activations.items()
+            }, step=current_step)
+            
+            # 移除钩子
+            for hook in hooks:
+                hook.remove()
+                
+        except Exception as e:
+            print(f"Failed to log layer activations: {e}")
+
+    def log_layer_parameters(self, model, current_step):
+        """记录层的参数分布"""
+        try:
+            for name, param in model.named_parameters():
+                if param.requires_grad:
+                    # 记录参数分布
+                    self._wandb.log({
+                        f"parameters/{name}": self._wandb.Histogram(param.data.cpu().numpy())
+                    }, step=current_step)
+                    
+                    # 记录梯度分布
+                    if param.grad is not None:
+                        self._wandb.log({
+                            f"gradients/{name}": self._wandb.Histogram(param.grad.cpu().numpy())
+                        }, step=current_step)
+        except Exception as e:
+            print(f"Failed to log layer parameters: {e}")

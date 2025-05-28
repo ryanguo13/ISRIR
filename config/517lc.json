@@ -27,7 +27,7 @@
             "use_shuffle": true,
             "data_len": -1
         },
-        "val": {
+        "val": { 
             "name": "FFHQ",
             "mode": "LRHR",
             "dataroot": "dataset/ffhq_raw_images_prepared_16_128",

@@ -9,7 +9,7 @@
         "tb_logger": "tb_logger",
         "results": "results",
         "checkpoint": "checkpoint",
-        "resume_state": "dataset/I640000_E37"
+        "resume_state": "experiments/official_pretuned/I830000_E32"
     },
     "datasets": {
         "train": {
@@ -20,14 +20,14 @@
             "l_resolution": 16,
             "r_resolution": 128,
             "batch_size": 4,
-            "num_workers": 8,
+            "num_workers": 2,
             "use_shuffle": true,
             "data_len": -1
         },
         "val": {
-            "name": "SingleImage",
+            "name": "FFHQ",
             "mode": "LRHR",
-            "dataroot": "data/prepared_prettygirl_16_128",
+            "dataroot": "data/single_image_infer",
             "datatype": "img",
             "l_resolution": 16,
             "r_resolution": 128,

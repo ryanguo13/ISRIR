@@ -11,8 +11,9 @@
     "log": "F:/SR3_training_result/logs",
     "tb_logger": "F:/SR3_training_result/tb_logger",
     "results": "F:/SR3_training_result/results",
+    //this is the result of validation process, containing image with sr,lr,hr,inf
     "checkpoint": "F:/SR3_training_result/checkpoint",
-    "resume_state": "dataset/I640000_E37",
+    "resume_state": "./dataset/I640000_E37",
     "param_output": "F:/SR3_training_result/param_outputs"
   },
   "datasets": {
@@ -24,20 +25,20 @@
       "l_resolution": 16,
       "r_resolution": 128,
       "batch_size": 8,
-      "num_workers": 16,
+      "num_workers": 4,
       "use_shuffle": true,
-      "data_len": -1,
-      "pin_memory": true,
-      "drop_last": true
+      "data_len": -1
     },
     "val": {
       "name": "FFHQ",
       "mode": "LRHR",
-      "dataroot": "dataset/ffhq_raw_images_prepared_16_128",
-      "datatype": "img",
+      "dataroot": "dataset/celebra_16_128",
+      "datatype": "lmdb",
       "l_resolution": 16,
       "r_resolution": 128,
       "data_len": 2
+      //this is the size of validation set.
+      //this means on the fixed frequency, the model will validate the result using data_len size images.
     }
   },
   "model": {
@@ -81,9 +82,9 @@
     }
   },
   "train": {
-    "n_iter": 650000,
-    "val_freq": 5000,
-    "save_checkpoint_freq": 5000,
+    "n_iter": 1000000,
+    "val_freq": ,
+    "save_checkpoint_freq": 500,
     "print_freq": 500,
     "save_param_freq": 50000,
     "optimizer": {

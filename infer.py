@@ -64,8 +64,15 @@ if __name__ == "__main__":
 
     result_path = '{}'.format(opt['path']['results'])
     os.makedirs(result_path, exist_ok=True)
-    for _,  val_data in enumerate(val_loader):
+    
+    # 修改这里，确保处理所有图片
+    total_images = len(val_loader)
+    logger.info(f'Total images to process: {total_images}')
+    
+    for val_data in val_loader:
         idx += 1
+        logger.info(f'Processing image {idx}/{total_images}')
+        
         diffusion.feed_data(val_data)
         diffusion.test(continous=True)
         visuals = diffusion.get_current_visuals(need_LR=False)
@@ -97,5 +104,6 @@ if __name__ == "__main__":
         if wandb_logger and opt['log_infer']:
             wandb_logger.log_eval_data(fake_img, Metrics.tensor2img(visuals['SR'][-1]), hr_img)
 
+    logger.info('Inference completed!')
     if wandb_logger and opt['log_infer']:
         wandb_logger.log_eval_table(commit=True)

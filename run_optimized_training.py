@@ -95,27 +95,27 @@ def optimize_config(config_path):
         
         with open(config_path, 'r') as f:
             config = json.load(f)
-        
-        # 根据GPU内存调整batch size
-        if torch.cuda.is_available():
-            gpu_memory = torch.cuda.get_device_properties(0).total_memory / 1024**3
+            # config['datasets']['train']['batch_size'] = 8
+            # config['datasets']['train']['num_workers'] = 12
+
+        # # 根据GPU内存调整batch size
+        # if torch.cuda.is_available():
+        #     gpu_memory = torch.cuda.get_device_properties(0).total_memory / 1024**3
             
-            if gpu_memory >= 16:
-                config['datasets']['train']['batch_size'] = 12
-                config['datasets']['train']['num_workers'] = 16
-                print(f"✅ 高端GPU检测 ({gpu_memory:.1f}GB)，batch_size设置为12")
-            elif gpu_memory >= 8:
-                config['datasets']['train']['batch_size'] = 8
-                config['datasets']['train']['num_workers'] = 12
-                print(f"✅ 中端GPU检测 ({gpu_memory:.1f}GB)，batch_size设置为8")
-            else:
-                config['datasets']['train']['batch_size'] = 4
-                config['datasets']['train']['num_workers'] = 8
-                print(f"✅ 低端GPU检测 ({gpu_memory:.1f}GB)，batch_size设置为4")
-        else:
-            config['datasets']['train']['batch_size'] = 2
-            config['datasets']['train']['num_workers'] = 4
-            print("⚠️  CPU模式，batch_size设置为2")
+        #     if gpu_memory >= 16:
+        #         config['datasets']['train']['batch_size'] = 12
+        #         config['datasets']['train']['num_workers'] = 16
+        #         print(f"✅ 高端GPU检测 ({gpu_memory:.1f}GB)，batch_size设置为12")
+        #     elif gpu_memory >= 8:
+        #         print(f"✅ 中端GPU检测 ({gpu_memory:.1f}GB)，batch_size设置为8")
+        #     else:
+        #         config['datasets']['train']['batch_size'] = 4
+        #         config['datasets']['train']['num_workers'] = 8
+        #         print(f"✅ 低端GPU检测 ({gpu_memory:.1f}GB)，batch_size设置为4")
+        # else:
+        #     config['datasets']['train']['batch_size'] = 2
+        #     config['datasets']['train']['num_workers'] = 4
+        #     print("⚠️  CPU模式，batch_size设置为2")
         
         # 检查数据集路径
         train_dataroot = config['datasets']['train']['dataroot']
@@ -130,12 +130,12 @@ def optimize_config(config_path):
             print("请确保数据集已正确下载和解压")
         
         # 保存优化后的配置
-        optimized_config_path = config_path.replace('.json', '_auto_optimized.json')
-        with open(optimized_config_path, 'w') as f:
-            json.dump(config, f, indent=2)
+        # optimized_config_path = config_path.replace('.json', '_auto_optimized.json')
+        # with open(optimized_config_path, 'w') as f:
+        #     json.dump(config, f, indent=2)
         
-        print(f"✅ 优化配置保存到: {optimized_config_path}")
-        return optimized_config_path
+        # print(f"✅ 优化配置保存到: {optimized_config_path}")
+        return config_path
         
     except Exception as e:
         print(f"❌ 配置优化失败: {e}")

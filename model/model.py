@@ -54,7 +54,7 @@ class DDPM(BaseModel):
             if self.device.type == 'mps':
                 self.scaler = GradScaler()
         self.load_network()
-        self.print_network()
+#        self.print_network()
 
     def feed_data(self, data):
         self.data = self.set_device(data)

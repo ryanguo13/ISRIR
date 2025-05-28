@@ -1,18 +1,18 @@
 {
   "name": "sr_ffhq_train_speed_optimized",
-  "phase": "train",
+  "phase": "val",
   "gpu_ids": [
     0
   ],
-  "log_wandb_ckpt": true,
+  "log_wandb_ckpt": false,
   "log_eval": false,
-  "enable_wandb": true,
+  "enable_wandb": false,
   "path": {
     "log": "F:/SR3_training_result/logs",
     "tb_logger": "F:/SR3_training_result/tb_logger",
     "results": "F:/SR3_training_result/results",
     "checkpoint": "F:/SR3_training_result/checkpoint",
-    "resume_state": "dataset/I640000_E37",
+    "resume_state": "F:/SR3_training_result/checkpoint/I650000_E39",
     "param_output": "F:/SR3_training_result/param_outputs"
   },
   "datasets": {
@@ -23,8 +23,8 @@
       "datatype": "lmdb",
       "l_resolution": 16,
       "r_resolution": 128,
-      "batch_size": 4,
-      "num_workers": 8,
+      "batch_size": 8,
+      "num_workers": 12,
       "use_shuffle": true,
       "data_len": -1,
       "pin_memory": true,
@@ -81,9 +81,9 @@
     }
   },
   "train": {
-    "n_iter": 650000,
+    "n_iter": 700000,
     "val_freq": 5000,
-    "save_checkpoint_freq": 5000,
+    "save_checkpoint_freq": 500,
     "print_freq": 500,
     "save_param_freq": 50000,
     "optimizer": {
@@ -109,4 +109,4 @@
     "save_loss_components": false,
     "layers_to_monitor": []
   }
-}
+} 

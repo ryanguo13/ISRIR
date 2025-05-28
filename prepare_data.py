@@ -71,7 +71,7 @@ class WorkingContext():
 def prepare_process_worker(wctx, file_subset):
     env = None
     if wctx.lmdb_save:
-        env = lmdb.open(wctx.out_path, map_size=1024 ** 4, readahead=False)
+        env = lmdb.open(wctx.out_path, map_size=5 * 1024 ** 3, readahead=False)
 
     for file in file_subset:
         i, imgs = wctx.resize_fn(file)
@@ -118,7 +118,7 @@ def prepare(img_path, out_path, n_worker, sizes=(16, 128), resample=Image.BICUBI
         os.makedirs('{}/sr_{}_{}'.format(out_path,
                     sizes[0], sizes[1]), exist_ok=True)
     else:
-        env = lmdb.open(out_path, map_size=1024 ** 4, readahead=False)
+        env = lmdb.open(out_path, map_size=5 * 1024 ** 3, readahead=False)
 
     if n_worker > 1:
         # prepare data subsets

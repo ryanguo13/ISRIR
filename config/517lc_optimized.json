@@ -29,7 +29,7 @@
             "data_len": -1
         },
         "val": {
-            "name": "FFHQ",
+            "name": "FFHQ", 
             "mode": "LRHR",
             "dataroot": "dataset/ffhq_raw_images_prepared_16_128",
             "datatype": "img",
