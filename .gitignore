@@ -146,6 +146,8 @@ dataset/celebahq_64_512/
 dataset/ffhq_64_512/
 dataset/ffhq_raw_images/
 dataset/
+wandb/
+misc/
 
 # Large model files
 *.pth

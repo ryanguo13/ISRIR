@@ -84,6 +84,11 @@
     "save_checkpoint_freq": 5000,
     "print_freq": 200,
     "save_param_freq": 50000,
+    "use_amp": true,
+    "amp_init_scale": 65536,
+    "amp_growth_factor": 2.0,
+    "amp_backoff_factor": 0.5,
+    "amp_growth_interval": 2000,
     "optimizer": {
       "type": "adamw",
       "lr": 0.0002,

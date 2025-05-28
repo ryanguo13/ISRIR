@@ -31,8 +31,8 @@
     "val": {
       "name": "FFHQ",
       "mode": "LRHR",
-      "dataroot": "dataset/ffhq_raw_images_prepared_16_128",
-      "datatype": "img",
+      "dataroot": "dataset/celebalmdb/lmdb",
+      "datatype": "lmdb",
       "l_resolution": 16,
       "r_resolution": 128,
       "data_len": 5
